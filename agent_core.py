@@ -48,9 +48,57 @@ class ReportAgent:
         return response.text
 
     def create_doc_with_inline_images(self, title, list_analisis, parent_folder_id=None):
-        doc_body = {'title': title}
-        doc = self.docs_service.documents().create(body=doc_body).execute()
-        doc_id = doc.get('documentId')
+    # 1. Buat dokumen baru langsung di root Drive
+    doc_body = {'title': title}
+    doc = self.docs_service.documents().create(body=doc_body).execute()
+    doc_id = doc.get('documentId')
+
+    requests_batch = []
+    current_idx = 1
+
+    # Header Dokumen
+    header = f"{title}\n\n"
+    requests_batch.append({'insertText': {'location': {'index': current_idx}, 'text': header}})
+    current_idx += len(header)
+
+    # Loop setiap soal, hasil analisis, dan gambarnya
+    for item in list_analisis:
+        section_text = f"📌 Pertanyaan: {item['soal']}\n\n🔍 Hasil Analisis:\n{item['jawaban']}\n\n"
+        requests_batch.append({'insertText': {'location': {'index': current_idx}, 'text': section_text}})
+        current_idx += len(section_text)
+
+        # Sisipkan GAMBAR VISUAL LANGSUNG
+        if item.get('image_id'):
+            try:
+                self.make_file_public(item['image_id'])
+                img_url = f"https://drive.google.com/thumbnail?id={item['image_id']}&sz=w1000"
+                
+                requests_batch.append({
+                    'insertInlineImage': {
+                        'location': {'index': current_idx},
+                        'uri': img_url,
+                        'objectSize': {
+                            'height': {'magnitude': 220, 'unit': 'PT'},
+                            'width': {'magnitude': 380, 'unit': 'PT'}
+                        }
+                    }
+                })
+                current_idx += 1
+            except Exception as e:
+                print(f"Gagal menyisipkan gambar: {e}")
+
+        divider = "\n\n" + ("=" * 40) + "\n\n"
+        requests_batch.append({'insertText': {'location': {'index': current_idx}, 'text': divider}})
+        current_idx += len(divider)
+
+    # Eksekusi penulisan dokumen
+    self.docs_service.documents().batchUpdate(
+        documentId=doc_id, body={'requests': requests_batch}
+    ).execute()
+
+    # Buat link dokumen bisa dibuka siapa saja yang memiliki link
+    self.make_file_public(doc_id)
+    return f"https://docs.google.com/document/d/{doc_id}/edit"
 
         if parent_folder_id:
             file = self.drive_service.files().get(fileId=doc_id, fields='parents').execute()
