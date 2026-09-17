@@ -8,7 +8,8 @@ from memory_manager import build_prompt_with_memory
 class ReportAgent:
     def __init__(self, gemini_api_key, credentials_path):
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-1.5-flash-latest')
+-flash')
         
         SCOPES = [
             'https://www.googleapis.com/auth/drive',
