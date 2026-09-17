@@ -21,9 +21,7 @@ class ReportAgent:
         self.docs_service = build('docs', 'v1', credentials=self.creds)
 
     def get_files_from_folder(self, folder_id):
-        # Membersihkan ID folder dari URL atau kata 'folders/'
         clean_folder_id = folder_id.split('/')[-1].replace('folders/', '')
-        
         query = f"'{clean_folder_id}' in parents and trashed = false"
         results = self.drive_service.files().list(
             q=query, fields="files(id, name, mimeType)"
@@ -31,7 +29,7 @@ class ReportAgent:
         return results.get('files', [])
 
     def make_file_public(self, file_id):
-        permission = {'type': 'anyone', 'role': 'reader'}
+        permission = {'type': 'anyone', 'role': 'writer'} # Set ke Writer agar tidak ada error permission
         self.drive_service.permissions().create(
             fileId=file_id, body=permission
         ).execute()
@@ -48,10 +46,26 @@ class ReportAgent:
         return response.text
 
     def create_doc_with_inline_images(self, title, list_analisis, parent_folder_id=None):
-        doc_body = {'title': title}
-        doc = self.docs_service.documents().create(body=doc_body).execute()
-        doc_id = doc.get('documentId')
+        # 1. Buat file Google Docs via Drive API (Lebih stabil & cegah Error 403)
+        file_metadata = {
+            'name': title,
+            'mimeType': 'application/vnd.google-apps.document'
+        }
+        
+        # Jika folder_id dimasukkan, langsung buat file di dalam folder tersebut
+        if parent_folder_id:
+            clean_parent_id = parent_folder_id.split('/')[-1].replace('folders/', '')
+            file_metadata['parents'] = [clean_parent_id]
 
+        doc_file = self.drive_service.files().create(
+            body=file_metadata, fields='id'
+        ).execute()
+        doc_id = doc_file.get('id')
+
+        # Bagikan akses publik agar bisa ditulis
+        self.make_file_public(doc_id)
+
+        # 2. Tulis Konten ke Google Docs
         requests_batch = []
         current_idx = 1
 
@@ -91,7 +105,6 @@ class ReportAgent:
             documentId=doc_id, body={'requests': requests_batch}
         ).execute()
 
-        self.make_file_public(doc_id)
         return f"https://docs.google.com/document/d/{doc_id}/edit"
 
 
