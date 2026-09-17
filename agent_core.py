@@ -21,11 +21,14 @@ class ReportAgent:
         self.docs_service = build('docs', 'v1', credentials=self.creds)
 
     def get_files_from_folder(self, folder_id):
-        query = f"'{folder_id}' in parents and trashed = false"
-        results = self.drive_service.files().list(
-            q=query, fields="files(id, name, mimeType)"
-        ).execute()
-        return results.get('files', [])
+    # Membersihkan input jika pengguna memasukkan full URL atau prefix 'folders/'
+    clean_folder_id = folder_id.split('/')[-1].replace('folders/', '')
+    
+    query = f"'{clean_folder_id}' in parents and trashed = false"
+    results = self.drive_service.files().list(
+        q=query, fields="files(id, name, mimeType)"
+    ).execute()
+    return results.get('files', [])
 
     def make_file_public(self, file_id):
         permission = {'type': 'anyone', 'role': 'reader'}
